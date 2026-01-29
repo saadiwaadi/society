@@ -1,26 +1,29 @@
+require('dotenv').config(); // Load variables first
 const express = require('express');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-const cors = require('cors'); // Added this for frontend connection later
+const cors = require('cors');
 
-dotenv.config();
 const app = express();
 
-app.use(express.json());
-app.use(cors()); // Allow frontend to talk to backend
+// --- MIDDLEWARE ---
+app.use(express.json()); // Allows the server to accept JSON data
+app.use(cors());         // Allows your React app to talk to this API
 
 // --- DATABASE CONNECTION ---
+// Using the variable from your .env file
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully'))
   .catch((err) => console.log('❌ MongoDB Connection Error:', err));
 
 // --- ROUTES ---
+// This connects the logic for your User models and logins
 app.use('/api/auth', require('./routes/authRoutes'));
 
 app.get('/', (req, res) => {
-  res.send('API is running...');
+  res.send('Society Portal API is running...');
 });
 
+// --- SERVER START ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
