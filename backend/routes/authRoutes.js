@@ -7,7 +7,7 @@ const User = require('../models/User');
 // ROUTE: POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    console.log("📥 Incoming Login Data:", req.body);
+    //console.log("📥 Incoming Login Data:", req.body);
 
     // 1. Extract and Clean Data
     const { identifier, password } = req.body;
@@ -19,7 +19,7 @@ router.post('/login', async (req, res) => {
     // 2. Check if user exists (Include the password field!)
     const user = await User.findOne({ email: cleanEmail }).select('+password');
     
-    console.log("👤 Database User Found:", user); 
+    //console.log("👤 Database User Found:", user); 
 
     if (!user) {
       console.log("⚠️ Login Failed: User not found ->", cleanEmail);
