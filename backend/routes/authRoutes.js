@@ -1,68 +1,70 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const rateLimit = require("express-rate-limit"); // 🛡️ Import Rate Limit
-const { check } = require("express-validator");  // 🛡️ Import Validator
-const validateRequest = require("../middleware/validateRequest"); // 🛡️ Import Bouncer
-const User = require("../models/User");
-
+const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
 
-// 🛡️ RATE LIMITER: Block IP after 10 failed attempts
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // <--- Increased to 10 attempts as requested
-  message: {
-    success: false,
-    message: "Too many login attempts, please try again after 15 minutes"
-  }
-});
+// ROUTE: POST /api/auth/login
+router.post('/login', async (req, res) => {
+  try {
+    console.log("📥 Incoming Login Data:", req.body);
 
-// LOGIN ROUTE
-router.post("/login", 
-  loginLimiter, // 1. Check Rate Limit
-  [
-    check('identifier').notEmpty().withMessage('Email or Member ID is required'),
-    check('password').notEmpty().withMessage('Password is required'),
-    validateRequest // 2. Check Input Validity
-  ], 
-  async (req, res) => {
-    try {
-      const { identifier, password } = req.body;
+    // 1. Extract and Clean Data
+    const { identifier, password } = req.body;
+    
+    // ⚠️ FIX: Remove accidental spaces from inputs
+    const cleanEmail = identifier.trim(); 
+    const cleanPassword = password.trim(); 
 
-      // Check if user exists (by email OR memberId)
-      const user = await User.findOne({
-        $or: [{ email: identifier }, { memberId: identifier }]
-      });
+    // 2. Check if user exists (Include the password field!)
+    const user = await User.findOne({ email: cleanEmail }).select('+password');
+    
+    console.log("👤 Database User Found:", user); 
 
-      if (!user) {
-        return res.status(401).json({ success: false, message: "Invalid credentials" });
-      }
-
-      // Check password
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ success: false, message: "Invalid credentials" });
-      }
-
-      // Generate Token
-      const token = jwt.sign(
-        { userId: user._id, isAdmin: user.isAdmin },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      // Standard Response
-      res.json({ 
-        success: true, 
-        token, 
-        isAdmin: user.isAdmin,
-        user: { name: user.name, email: user.email, memberId: user.memberId }
-      });
-
-    } catch (err) {
-      res.status(500).json({ success: false, message: "Server Error" });
+    if (!user) {
+      console.log("⚠️ Login Failed: User not found ->", cleanEmail);
+      return res.status(400).json({ msg: "User not found" });
     }
+
+    // 3. Validate Password
+    // compare(cleanPassword, hashed_password_from_db)
+    const isMatch = await bcrypt.compare(cleanPassword, user.password);
+    
+    if (!isMatch) {
+      console.log("⚠️ Login Failed: Wrong password ->", cleanEmail);
+      return res.status(400).json({ msg: 'Invalid credentials' });
+    }
+
+    // 4. Create Token
+    const payload = { user: { id: user.id, role: user.role } };
+    
+    if (!process.env.JWT_SECRET) {
+      throw new Error("Missing JWT_SECRET in .env file");
+    }
+
+    jwt.sign(
+      payload,
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' },
+      (err, token) => {
+        if (err) throw err;
+        console.log("✅ Login Successful for:", cleanEmail);
+        // Return user info WITHOUT the password
+        res.json({ 
+            token, 
+            user: { 
+                id: user.id, 
+                email: user.email, 
+                role: user.role 
+            } 
+        });
+      }
+    );
+
+  } catch (err) {
+    console.error("❌ ROUTE ERROR:", err.message);
+    res.status(500).send('Server Error');
+  }
 });
 
 module.exports = router;

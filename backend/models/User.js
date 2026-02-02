@@ -1,22 +1,26 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  // ... other fields
   memberId: { 
     type: String, 
     required: true, 
-    unique: true, // Creates an index automatically
-    index: true   // Explicitly asking for an index (double sure)
+    unique: true 
   },
   email: { 
     type: String, 
     required: true, 
     unique: true 
   },
-  // ... passwordHash, isAdmin, etc.
+  password: { 
+    type: String, 
+    required: true, 
+    select: false // ✅ This hides the password by default (security best practice)
+  },
+  role: { 
+    type: String, 
+    enum: ['admin', 'member'], 
+    default: 'member' 
+  }
 }, { timestamps: true });
-
-// Compound index example (if you search by name often)
-userSchema.index({ name: 1 }); 
 
 module.exports = mongoose.model("User", userSchema);
