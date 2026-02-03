@@ -1,69 +1,84 @@
-const express = require('express');
+const express = require("express");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-// ROUTE: POST /api/auth/login
-router.post('/login', async (req, res) => {
+// ==========================
+// 1. REGISTER ROUTE
+// ==========================
+router.post("/register", async (req, res) => {
   try {
-    //console.log("📥 Incoming Login Data:", req.body);
+    const { name, email, password, unit_no, contact } = req.body;
 
-    // 1. Extract and Clean Data
-    const { identifier, password } = req.body;
-    
-    // ⚠️ FIX: Remove accidental spaces from inputs
-    const cleanEmail = identifier.trim(); 
-    const cleanPassword = password.trim(); 
+    // Check if user exists
+    let user = await User.findOne({ email });
+    if (user) return res.status(400).json({ message: "User already exists" });
 
-    // 2. Check if user exists (Include the password field!)
-    const user = await User.findOne({ email: cleanEmail }).select('+password');
-    
-    //console.log("👤 Database User Found:", user); 
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    if (!user) {
-      console.log("⚠️ Login Failed: User not found ->", cleanEmail);
-      return res.status(400).json({ msg: "User not found" });
-    }
+    // Create user
+    user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      unit_no,
+      contact,
+      role: "resident" // Default role
+    });
 
-    // 3. Validate Password
-    // compare(cleanPassword, hashed_password_from_db)
-    const isMatch = await bcrypt.compare(cleanPassword, user.password);
-    
-    if (!isMatch) {
-      console.log("⚠️ Login Failed: Wrong password ->", cleanEmail);
-      return res.status(400).json({ msg: 'Invalid credentials' });
-    }
+    await user.save();
 
-    // 4. Create Token
-    const payload = { user: { id: user.id, role: user.role } };
-    
-    if (!process.env.JWT_SECRET) {
-      throw new Error("Missing JWT_SECRET in .env file");
-    }
-
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' },
-      (err, token) => {
-        if (err) throw err;
-        console.log("✅ Login Successful for:", cleanEmail);
-        // Return user info WITHOUT the password
-        res.json({ 
-            token, 
-            user: { 
-                id: user.id, 
-                email: user.email, 
-                role: user.role 
-            } 
-        });
-      }
+    // Create Token
+    const token = jwt.sign(
+      { id: user._id, role: user.role }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: "1h" }
     );
 
+    res.status(201).json({ 
+      token, 
+      user: { id: user._id, name: user.name, role: user.role, unit_no: user.unit_no } 
+    });
+
   } catch (err) {
-    console.error("❌ ROUTE ERROR:", err.message);
-    res.status(500).send('Server Error');
+    console.error("Register Error:", err.message); // Log error to terminal
+    res.status(500).json({ message: "Server Error", error: err.message });
+  }
+});
+
+// ==========================
+// 2. LOGIN ROUTE
+// ==========================
+router.post("/login", async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+
+    // Allow login by Email OR Member ID (if you have one) - for now just Email
+    const user = await User.findOne({ email: identifier });
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+
+    // Validate Password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+
+    // Create Token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.json({
+      token,
+      user: { id: user._id, name: user.name, role: user.role, unit_no: user.unit_no }
+    });
+
+  } catch (err) {
+    console.error("Login Error:", err.message);
+    res.status(500).json({ message: "Server Error" });
   }
 });
 

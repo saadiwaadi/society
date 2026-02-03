@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api from "../services/api.js";
-import { useNavigate } from "react-router-dom"; 
+import { useNavigate, Link } from "react-router-dom";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -88,6 +88,12 @@ const Login = () => {
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
+          <div className="text-center text-sm mt-4">
+            <span className="text-gray-500">Don't have an account? </span>
+            <Link to="/signup" className="text-blue-600 hover:text-blue-500 font-medium">
+            Sign up
+            </Link>
+          </div>
         </form>
       </div>
     </div>
